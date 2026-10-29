@@ -1,0 +1,904 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture Tests from Zero</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&family=Schibsted+Grotesk:wght@500;700;800&display=swap">
+<style>
+/* Embed layout: made for a fixed-height iframe in an intranet page. Header with step pills and footer with Back/Next stay put; only the middle scrolls. One section at a time. Light only, to sit inside a light intranet. */
+:root {
+  --paper: #f3f6f7;
+  --surface: #ffffff;
+  --ink: #16212b;
+  --muted: #566573;
+  --line: #d8e0e5;
+  --accent: #0a6b75;
+  --accent-ink: #ffffff;
+  --accent-soft: #dff0f1;
+  --right: #1b7642;
+  --right-soft: #e2f3e9;
+  --wrong: #b0392a;
+  --wrong-soft: #fbe8e4;
+  --note: #8a5a00;
+  --note-soft: #fff3d6;
+  --code-bg: #0f1a21;
+  --code-tab: #1a2a34;
+  --code-line: #22323c;
+  --code-fg: #e4edf2;
+  --tk-comment: #7f949f;
+  --tk-keyword: #7cc7ff;
+  --tk-string: #a6e3a1;
+  --tk-fn: #f5c97a;
+  --tk-class: #8fe0d6;
+  --tk-punct: #a9b8c2;
+  --font-display: "Schibsted Grotesk", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  --radius: 10px;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+a { color: var(--accent); text-underline-offset: 3px; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+[hidden] { display: none !important; }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.15; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(1.8rem, 4.5vw, 2.6rem); font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: clamp(1.35rem, 3vw, 1.65rem); font-weight: 800; letter-spacing: -0.01em; }
+h3 { font-size: 1.1rem; font-weight: 700; }
+p { margin: 0; }
+code { font-family: var(--font-mono); font-size: 0.86em; background: var(--accent-soft); padding: 0.1em 0.35em; border-radius: 4px; overflow-wrap: anywhere; }
+dfn { font-style: normal; font-weight: 700; border-bottom: 2px dotted var(--accent); }
+.eyebrow { font-family: var(--font-display); font-size: 0.76rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+
+/* frame */
+.app { height: 100%; display: flex; flex-direction: column; }
+.top { flex: none; background: var(--surface); border-bottom: 1px solid var(--line); padding: 10px 16px 0; display: grid; gap: 8px; }
+.top-row { display: flex; align-items: center; gap: 14px; }
+.top-title { font-family: var(--font-display); font-weight: 700; font-size: 0.95rem; white-space: nowrap; }
+.bar { flex: 1; height: 7px; background: var(--line); border-radius: 99px; overflow: hidden; min-width: 50px; }
+.bar span { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 99px; transition: width .4s ease; }
+.score { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.steps { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.steps::-webkit-scrollbar { display: none; }
+.steps button { flex: none; display: flex; align-items: center; gap: 6px; font: 600 0.82rem var(--font-display); color: var(--muted); background: none; border: 0; border-bottom: 3px solid transparent; padding: 6px 8px 9px; cursor: pointer; white-space: nowrap; }
+.steps button[aria-current="step"] { color: var(--ink); border-bottom-color: var(--accent); }
+.steps .dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font: 600 0.62rem var(--font-mono); }
+.steps button.done .dot { background: var(--right); border-color: var(--right); color: var(--surface); }
+
+.stage { flex: 1; overflow-y: auto; overscroll-behavior: contain; }
+.view { max-width: 860px; margin: 0 auto; padding: 28px 16px 40px; display: grid; gap: 20px; }
+.view > p, .view > ul { max-width: 68ch; }
+.view ul { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; }
+.head { display: grid; gap: 6px; }
+
+.nav { flex: none; background: var(--surface); border-top: 1px solid var(--line); padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.nav .where { font: 0.8rem var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.btn { font: 700 0.92rem var(--font-display); color: var(--accent-ink); background: var(--accent); border: 1.5px solid var(--accent); border-radius: 8px; padding: 8px 16px; cursor: pointer; }
+.btn.ghost { color: var(--accent); background: transparent; }
+.btn.small { padding: 5px 11px; font-size: 0.8rem; }
+.btn:disabled { opacity: 0.35; cursor: default; }
+
+/* start */
+.lede { font-size: 1.12rem; color: var(--muted); max-width: 60ch; }
+.made-for { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.made-for > span:first-child { font-weight: 700; margin-right: 2px; }
+.chip { font-size: 0.86rem; padding: 3px 11px; border-radius: 99px; background: var(--surface); border: 1px solid var(--line); }
+.toc { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.toc li { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 10px 14px; }
+.toc .n { font: 600 0.8rem var(--font-mono); color: var(--accent); }
+.toc .m { font-size: 0.82rem; color: var(--muted); white-space: nowrap; }
+.prompt { font-size: 0.93rem; white-space: pre-wrap; background: var(--paper); border-radius: 8px; padding: 12px 14px; margin: 0; font-family: var(--font-body); }
+
+/* lesson parts */
+.compare { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
+.compare > div { padding: 16px 18px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.compare > div + div { border-left: 1px solid var(--line); background: var(--accent-soft); }
+.compare h3 { font-size: 1rem; }
+.compare ul { padding-left: 1.1em; font-size: 0.94rem; }
+.callout { border-radius: var(--radius); padding: 14px 16px; background: var(--note-soft); display: grid; gap: 6px; max-width: 68ch; }
+.callout strong { color: var(--note); font-family: var(--font-display); }
+
+.flow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; counter-reset: step; }
+.flow div { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; display: grid; gap: 4px; align-content: start; min-width: 0; }
+.flow div::before { counter-increment: step; content: counter(step); font: 600 0.72rem var(--font-mono); color: var(--accent); }
+.flow b { font-family: var(--font-display); }
+.flow span { font-size: 0.85rem; color: var(--muted); line-height: 1.4; }
+.diagram { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; }
+.diagram svg { display: block; width: 100%; min-width: 560px; height: auto; }
+.d-box { fill: var(--paper); stroke: var(--line); stroke-width: 1.5; }
+.d-box.hot { fill: var(--wrong-soft); stroke: var(--wrong); }
+.d-name { fill: var(--ink); font-family: var(--font-display); font-weight: 700; font-size: 15px; }
+.d-ns { fill: var(--muted); font-family: var(--font-mono); font-size: 10px; }
+.d-ok { stroke: var(--right); stroke-width: 2; fill: none; }
+.d-bad { stroke: var(--wrong); stroke-width: 2; stroke-dasharray: 6 5; fill: none; }
+.d-head-ok { fill: var(--right); }
+.d-head-bad { fill: var(--wrong); }
+.d-label { fill: var(--wrong); font-family: var(--font-body); font-size: 13px; font-weight: 700; }
+.d-legend { fill: var(--muted); font-family: var(--font-body); font-size: 12px; }
+
+.code-card { border-radius: var(--radius); overflow: hidden; background: var(--code-bg); min-width: 0; }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 8px 0; border-bottom: 1px solid var(--code-line); }
+.tabs button { font: 600 0.8rem var(--font-mono); color: var(--tk-punct); background: transparent; border: 0; padding: 7px 11px; border-radius: 6px 6px 0 0; cursor: pointer; }
+.tabs button[aria-selected="true"] { color: var(--code-fg); background: var(--code-tab); }
+pre { margin: 0; padding: 16px 18px; overflow-x: auto; font: 0.84rem/1.65 var(--font-mono); color: var(--code-fg); background: var(--code-bg); }
+pre code { background: none; padding: 0; font-size: inherit; color: inherit; overflow-wrap: normal; }
+.code-cap { font: 0.76rem var(--font-mono); color: var(--tk-comment); padding: 0 18px 12px; }
+.token.comment { color: var(--tk-comment); font-style: italic; }
+.token.keyword, .token.boolean { color: var(--tk-keyword); }
+.token.string { color: var(--tk-string); }
+.token.function { color: var(--tk-fn); }
+.token.class-name, .token.namespace { color: var(--tk-class); }
+.token.punctuation, .token.operator { color: var(--tk-punct); }
+.token.annotation, .token.attribute { color: var(--tk-fn); }
+
+.parts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.parts div { border-top: 3px solid var(--accent); background: var(--surface); padding: 10px 12px; border-radius: 0 0 8px 8px; display: grid; gap: 4px; align-content: start; min-width: 0; }
+.parts b { font-family: var(--font-display); }
+.parts code { font-size: 0.76rem; }
+.parts span { font-size: 0.87rem; color: var(--muted); line-height: 1.4; }
+
+.rules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.rule { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.rule p { font-size: 0.94rem; }
+.rule pre { padding: 10px 12px; font-size: 0.75rem; border-radius: 6px; }
+
+/* quiz */
+.quiz { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: grid; gap: 24px; }
+.quiz-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.quiz-head .tally { font: 0.82rem var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.q { display: grid; gap: 8px; border: 0; margin: 0; padding: 0; min-width: 0; }
+.q legend { font-weight: 700; padding: 0; margin-bottom: 8px; max-width: 68ch; }
+.q legend .n { font-family: var(--font-mono); color: var(--accent); margin-right: 8px; font-size: 0.82rem; }
+.opt { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; text-align: left; width: 100%; font: inherit; font-size: 0.95rem; color: var(--ink); background: var(--paper); border: 1.5px solid var(--line); border-radius: 9px; padding: 9px 13px; cursor: pointer; line-height: 1.45; }
+.opt:hover:not(:disabled) { border-color: var(--accent); }
+.opt .key { width: 22px; height: 22px; border-radius: 6px; border: 1.5px solid var(--line); display: grid; place-items: center; font: 600 0.72rem var(--font-mono); color: var(--muted); }
+.opt:disabled { cursor: default; }
+.opt.is-right { border-color: var(--right); background: var(--right-soft); }
+.opt.is-right .key { background: var(--right); border-color: var(--right); color: var(--surface); }
+.opt.is-wrong { border-color: var(--wrong); background: var(--wrong-soft); }
+.opt.is-wrong .key { background: var(--wrong); border-color: var(--wrong); color: var(--surface); }
+.opt.faded { opacity: 0.55; }
+.feedback { border-radius: 9px; padding: 11px 13px; font-size: 0.94rem; display: grid; gap: 4px; }
+.feedback.ok { background: var(--right-soft); }
+.feedback.no { background: var(--wrong-soft); }
+.feedback b { font-family: var(--font-display); }
+.feedback.ok b { color: var(--right); }
+.feedback.no b { color: var(--wrong); }
+
+/* exercise */
+.tree { font: 0.84rem/1.7 var(--font-mono); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; overflow-x: auto; white-space: pre; }
+.tree .dim { color: var(--muted); }
+.task { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 14px 16px; border-radius: 0 var(--radius) var(--radius) 0; display: grid; gap: 6px; max-width: 70ch; }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); min-width: 0; }
+details > summary { cursor: pointer; padding: 12px 16px; font-family: var(--font-display); font-weight: 700; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::after { content: "Show"; font: 600 0.78rem var(--font-mono); color: var(--accent); }
+details[open] > summary::after { content: "Hide"; }
+details > .body { padding: 0 16px 16px; display: grid; gap: 12px; }
+textarea { width: 100%; min-height: 90px; font: inherit; font-size: 0.95rem; color: var(--ink); background: var(--paper); border: 1.5px solid var(--line); border-radius: 9px; padding: 11px 13px; resize: vertical; }
+.row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.copied { font-size: 0.85rem; color: var(--right); }
+
+.finish { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; display: grid; gap: 18px; }
+.finish-top { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+.finish-top > div:last-child { display: grid; gap: 4px; min-width: 0; flex: 1; }
+.big { font: 800 3rem/1 var(--font-display); color: var(--accent); font-variant-numeric: tabular-nums; }
+.big small { font-size: 1.2rem; color: var(--muted); }
+.muted { color: var(--muted); }
+.asks { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.asks li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; background: var(--paper); border-radius: 9px; padding: 11px 13px; font-size: 0.93rem; }
+
+.sheet { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.sheet > div { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.sheet .wide { grid-column: 1 / -1; }
+.sheet ul { padding-left: 1.1em; font-size: 0.92rem; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--font-display); font-size: 0.76rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+dl { margin: 0; display: grid; gap: 6px; font-size: 0.92rem; }
+dt { font-weight: 700; }
+dd { margin: 0 0 4px; color: var(--muted); }
+.pattern { font: 600 0.95rem var(--font-mono); color: var(--accent); overflow-wrap: anywhere; }
+
+@media (max-width: 760px) {
+  .flow { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+  .parts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .compare, .rules, .sheet, .parts { grid-template-columns: minmax(0, 1fr); }
+  .compare > div + div { border-left: 0; border-top: 1px solid var(--line); }
+  .top-title, .where-label { display: none; }
+  .quiz, .finish { padding: 15px; }
+  .toc li { grid-template-columns: 24px minmax(0, 1fr); }
+  .toc .m { grid-column: 2; }
+}
+@media (prefers-reduced-motion: reduce) { .bar span { transition: none; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="top-row">
+      <span class="top-title">Architecture tests, from zero</span>
+      <div class="bar" role="progressbar" aria-label="Questions answered" aria-valuemin="0" aria-valuemax="12" aria-valuenow="0"><span id="bar-fill"></span></div>
+      <span class="score" id="score-top">0 / 12 answered</span>
+    </div>
+    <nav class="steps" id="steps" aria-label="Sections"></nav>
+  </header>
+
+  <div class="stage" id="stage">
+    <!-- start -->
+    <section class="view" id="start" data-label="Start">
+      <span class="eyebrow">Your course · 5 sections · about 25 minutes</span>
+      <h1>Architecture tests, from zero</h1>
+      <p class="lede">By the end you can explain what an architecture test checks, how the tool finds a broken rule without running the app, and write your first rule for a C# project.</p>
+      <div class="made-for">
+        <span>Built for</span>
+        <span class="chip">QA engineer</span>
+        <span class="chip">Knows unit tests</span>
+        <span class="chip">New to architecture tests</span>
+        <span class="chip">C# / .NET team</span>
+      </div>
+      <ol class="toc">
+        <li><span class="n">1</span><span>What an architecture test checks</span><span class="m">4 min · quiz</span></li>
+        <li><span class="n">2</span><span>How the tool finds a broken rule</span><span class="m">4 min · quiz</span></li>
+        <li><span class="n">3</span><span>Your first test in C#</span><span class="m">6 min · quiz</span></li>
+        <li><span class="n">4</span><span>Rules worth writing first</span><span class="m">5 min · quiz</span></li>
+        <li><span class="n">5</span><span>Exercise: guard the controllers</span><span class="m">6 min · hands-on</span></li>
+      </ol>
+      <div class="row"><button class="btn" type="button" data-go="s1">Start section 1</button><span class="muted" id="resume-note" hidden>Your answers from last time are saved in this browser.</span></div>
+      <details>
+        <summary>How this course was made</summary>
+        <div class="body">
+          <p>Claude wrote this course from a single prompt. Change the role, the stack and the topic to get one built for you:</p>
+<pre class="prompt">I want to learn about architecture tests. I'm a QA engineer: I write and run test cases and I know what unit tests are, but I've never seen an architecture test. Our backend is C# / .NET.
+
+Build me a short course as an interactive page:
+- 4–5 short sections, each under five minutes, building on what I already know
+- a 3-question quiz after every section, explaining why each answer is right or wrong
+- real examples in C#, with the same rule in Java and TypeScript for comparison
+- a hands-on exercise at the end, with the solution hidden until I ask for it
+- a one-page cheat sheet to keep
+
+Use plain language and explain every term the first time you use it. Link the official docs for every tool you mention so I can check the details.</pre>
+          <div class="row"><button class="btn ghost small" type="button" id="copy-prompt">Copy prompt</button><span class="copied" id="copied-prompt" hidden></span></div>
+        </div>
+      </details>
+    </section>
+
+    <!-- 1 -->
+    <section class="view" id="s1" data-label="What it checks" hidden>
+      <div class="head">
+        <span class="eyebrow">Section 1 · 4 min</span>
+        <h2>A unit test checks what code does. An architecture test checks where it lives and what it talks to.</h2>
+      </div>
+      <p>You already know unit tests: give the payslip calculator a salary and a tax table, check the net pay that comes out. That tests <em>behaviour</em>.</p>
+      <p>An architecture test never looks at results. It reads the code itself and checks it against house rules your team agreed on, such as "the payroll calculation logic never talks to the database directly". Think of a building inspector: they don't taste the food in the kitchen, they check that the fire exits aren't blocked.</p>
+      <div class="compare">
+        <div>
+          <h3>A unit test asks</h3>
+          <ul>
+            <li>Does <code>PayslipCalculator</code> return 2,412.50 net for this employee?</li>
+            <li>Does an unpaid leave month give 0 net pay?</li>
+            <li>Does a negative hours value throw an error?</li>
+          </ul>
+        </div>
+        <div>
+          <h3>An architecture test asks</h3>
+          <ul>
+            <li>Does anything in the Domain layer use the database code?</li>
+            <li>Do controllers call repositories directly, skipping the service layer?</li>
+            <li>Does every class ending in <code>Repository</code> live in Infrastructure?</li>
+          </ul>
+        </div>
+      </div>
+      <p>A <dfn>layer</dfn> is a group of code with one job: the API that receives requests, the business rules, the database access. Teams draw them as boxes on a diagram. A <dfn>dependency</dfn> is one piece of code using another: if <code>PayslipCalculator</code> calls <code>SqlConnectionFactory</code>, the calculator depends on it.</p>
+      <p>The problem is that the diagram lives on a wiki page and the code changes every day. One stray line slips past review, then another. An architecture test turns the diagram into a test that fails the build.</p>
+      <div class="quiz" data-quiz="s1"></div>
+    </section>
+
+    <!-- 2 -->
+    <section class="view" id="s2" data-label="How it works" hidden>
+      <div class="head">
+        <span class="eyebrow">Section 2 · 4 min</span>
+        <h2>The tool reads your compiled code, maps who uses whom, and checks the map against your rule</h2>
+      </div>
+      <p>The app never starts. No database, no test environment, no browser. Checking code without running it is called <dfn>static analysis</dfn>, and it is why an architecture test finishes in seconds.</p>
+      <div class="flow" aria-label="Five steps of an architecture test">
+        <div><b>Load</b><span>Read the compiled code: the .dll in C#, the class files in Java.</span></div>
+        <div><b>Map</b><span>List every dependency: which class uses which.</span></div>
+        <div><b>Select</b><span>Pick the classes the rule is about, e.g. everything in Payroll.Domain.</span></div>
+        <div><b>Check</b><span>Apply the condition: "must not use Payroll.Infrastructure".</span></div>
+        <div><b>Report</b><span>Pass, or fail and name each class that broke the rule.</span></div>
+      </div>
+      <p>Here is the map for a small payroll service. Green arrows are allowed. The red one is what the test catches.</p>
+      <div class="diagram">
+        <svg viewBox="0 0 700 236" role="img" aria-label="Four layers: Api uses Application, Application uses Domain, Infrastructure uses Domain. A forbidden dashed red arrow shows Domain using Infrastructure.">
+          <defs>
+            <marker id="ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-head-ok" d="M0 0 L10 5 L0 10 z"/></marker>
+            <marker id="bad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-head-bad" d="M0 0 L10 5 L0 10 z"/></marker>
+          </defs>
+          <rect class="d-box" x="8" y="30" width="145" height="64" rx="8"/>
+          <text class="d-name" x="80" y="58" text-anchor="middle">Api</text>
+          <text class="d-ns" x="80" y="78" text-anchor="middle">Payroll.Api</text>
+          <rect class="d-box" x="183" y="30" width="145" height="64" rx="8"/>
+          <text class="d-name" x="255" y="58" text-anchor="middle">Application</text>
+          <text class="d-ns" x="255" y="78" text-anchor="middle">Payroll.Application</text>
+          <rect class="d-box hot" x="358" y="30" width="145" height="64" rx="8"/>
+          <text class="d-name" x="430" y="58" text-anchor="middle">Domain</text>
+          <text class="d-ns" x="430" y="78" text-anchor="middle">Payroll.Domain</text>
+          <rect class="d-box" x="533" y="30" width="145" height="64" rx="8"/>
+          <text class="d-name" x="605" y="58" text-anchor="middle">Infrastructure</text>
+          <text class="d-ns" x="605" y="78" text-anchor="middle">Payroll.Infrastructure</text>
+          <line class="d-ok" x1="153" y1="62" x2="181" y2="62" marker-end="url(#ok)"/>
+          <line class="d-ok" x1="328" y1="62" x2="356" y2="62" marker-end="url(#ok)"/>
+          <line class="d-ok" x1="533" y1="62" x2="505" y2="62" marker-end="url(#ok)"/>
+          <path class="d-bad" d="M430 94 C 430 168, 605 168, 605 98" marker-end="url(#bad)"/>
+          <text class="d-label" x="517" y="182" text-anchor="middle">✕ PayslipCalculator uses SqlConnectionFactory</text>
+          <line class="d-ok" x1="20" y1="218" x2="52" y2="218"/>
+          <text class="d-legend" x="60" y="222">allowed dependency</text>
+          <line class="d-bad" x1="200" y1="218" x2="232" y2="218"/>
+          <text class="d-legend" x="240" y="222">breaks the rule "Domain must not depend on Infrastructure"</text>
+        </svg>
+      </div>
+      <div class="callout">
+        <strong>Why this matters to a QA</strong>
+        <p>Once the domain code needs a database, you can no longer unit test the payroll rules on their own. Every test of a tax calculation now needs a database set up. The architecture test protects your fast tests.</p>
+      </div>
+      <div class="quiz" data-quiz="s2"></div>
+    </section>
+
+    <!-- 3 -->
+    <section class="view" id="s3" data-label="First test" hidden>
+      <div class="head">
+        <span class="eyebrow">Section 3 · 6 min</span>
+        <h2>Your first architecture test is an ordinary xUnit test with four parts</h2>
+      </div>
+      <p>In C#, the NetArchTest library gives you the rule-writing part. Add it to your test project once:</p>
+      <div class="code-card"><pre><code class="language-bash">dotnet add package NetArchTest.Rules</code></pre></div>
+      <p>Then write the rule from Section 2 as a test. It sits next to your unit tests and runs with <code>dotnet test</code>.</p>
+      <div class="code-card">
+        <div class="tabs" role="tablist" aria-label="Language">
+          <button role="tab" aria-selected="true" aria-controls="t-cs" id="b-cs" type="button">C# · NetArchTest</button>
+          <button role="tab" aria-selected="false" aria-controls="t-java" id="b-java" type="button">Java · ArchUnit</button>
+          <button role="tab" aria-selected="false" aria-controls="t-ts" id="b-ts" type="button">TypeScript · dependency-cruiser</button>
+        </div>
+        <div role="tabpanel" id="t-cs" aria-labelledby="b-cs">
+<pre><code class="language-csharp">using NetArchTest.Rules;
+using Xunit;
+
+public class ArchitectureTests
+{
+    [Fact]
+    public void Domain_should_not_depend_on_infrastructure()
+    {
+        var result = Types.InAssembly(typeof(PayslipCalculator).Assembly)
+            .That()
+            .ResideInNamespace("Payroll.Domain")
+            .ShouldNot()
+            .HaveDependencyOn("Payroll.Infrastructure")
+            .GetResult();
+
+        Assert.True(result.IsSuccessful,
+            "Domain classes using Infrastructure: " +
+            string.Join(", ", result.FailingTypeNames ?? Array.Empty&lt;string&gt;()));
+    }
+}</code></pre>
+          <p class="code-cap">Runs with dotnet test · fails with the names of the classes that broke the rule</p>
+        </div>
+        <div role="tabpanel" id="t-java" aria-labelledby="b-java" hidden>
+<pre><code class="language-java">import com.tngtech.archunit.junit.AnalyzeClasses;
+import com.tngtech.archunit.junit.ArchTest;
+import com.tngtech.archunit.lang.ArchRule;
+
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+
+@AnalyzeClasses(packages = "com.visma.payroll")
+class ArchitectureTest {
+
+    @ArchTest
+    static final ArchRule domainShouldNotDependOnInfrastructure =
+        noClasses().that().resideInAPackage("..domain..")
+            .should().dependOnClassesThat().resideInAPackage("..infrastructure..");
+}</code></pre>
+          <p class="code-cap">Runs with JUnit 5 · ".." means "this package and anything below it"</p>
+        </div>
+        <div role="tabpanel" id="t-ts" aria-labelledby="b-ts" hidden>
+<pre><code class="language-javascript">// .dependency-cruiser.js
+module.exports = {
+  forbidden: [
+    {
+      name: "domain-not-to-infrastructure",
+      severity: "error",
+      from: { path: "^src/domain" },
+      to: { path: "^src/infrastructure" },
+    },
+  ],
+};</code></pre>
+          <p class="code-cap">Run: npx depcruise src --config .dependency-cruiser.js · reads import statements instead of compiled code</p>
+        </div>
+      </div>
+      <p>Every architecture test in every language has the same four parts. Find them in the C# version:</p>
+      <div class="parts">
+        <div><b>Load</b><code>Types.InAssembly(…)</code><span>Every class in the compiled project. An <dfn>assembly</dfn> is the .dll a C# project builds into. Any class from it works as the pointer.</span></div>
+        <div><b>Select</b><code>.That().ResideInNamespace(…)</code><span>Narrows it to the classes this rule is about.</span></div>
+        <div><b>Condition</b><code>.ShouldNot().HaveDependencyOn(…)</code><span>What those classes must not do.</span></div>
+        <div><b>Result</b><code>.GetResult()</code><span>Runs the check. <code>FailingTypeNames</code> lists who broke it.</span></div>
+      </div>
+      <p>Run it in <dfn>CI</dfn>, the pipeline that builds and tests every pull request automatically. Then nobody has to remember to run it.</p>
+      <div class="quiz" data-quiz="s3"></div>
+    </section>
+
+    <!-- 4 -->
+    <section class="view" id="s4" data-label="Rules to write" hidden>
+      <div class="head">
+        <span class="eyebrow">Section 4 · 5 min</span>
+        <h2>Start with one rule your team already agrees on, then add these four kinds</h2>
+      </div>
+      <p>Most useful architecture rules fall into four groups. Each one below has its plain-language version first.</p>
+      <div class="rules">
+        <div class="rule">
+          <h3>Layers point one way</h3>
+          <p>Api uses Application, Application uses Domain. Never the other way round.</p>
+<pre><code class="language-csharp">.That().ResideInNamespace("Payroll.Domain")
+.ShouldNot().HaveDependencyOn("Payroll.Api")</code></pre>
+        </div>
+        <div class="rule">
+          <h3>Names match their home</h3>
+          <p>Anything called <code>…Controller</code> lives in the Api layer, so people can find it.</p>
+<pre><code class="language-csharp">.That().HaveNameEndingWith("Controller")
+.Should().ResideInNamespace("Payroll.Api")</code></pre>
+        </div>
+        <div class="rule">
+          <h3>Modules keep their internals private</h3>
+          <p>The absence module may use the tax module's public API, not its internal tables.</p>
+<pre><code class="language-csharp">.That().ResideInNamespace("Payroll.Absence")
+.ShouldNot().HaveDependencyOn("Payroll.Tax.Internal")</code></pre>
+        </div>
+        <div class="rule">
+          <h3>No circles</h3>
+          <p>If Absence uses Tax and Tax uses Absence, neither can change alone. Java and TypeScript tools check this directly:</p>
+<pre><code class="language-java">slices().matching("com.visma.payroll.(*)..")
+    .should().beFreeOfCycles();</code></pre>
+        </div>
+      </div>
+      <div class="callout">
+        <strong>When the rule finds 40 old problems on day one</strong>
+        <p>Don't skip the test. Record the existing violations as known exceptions and fail only on new ones. ArchUnit calls this "freezing" a rule. In NetArchTest you filter the known classes out of the selection. Then fix the old ones over time.</p>
+      </div>
+      <div class="quiz" data-quiz="s4"></div>
+    </section>
+
+    <!-- 5 -->
+    <section class="view" id="s5" data-label="Exercise" hidden>
+      <div class="head">
+        <span class="eyebrow">Section 5 · 6 min · hands-on</span>
+        <h2>Exercise: stop controllers from reaching the database</h2>
+      </div>
+      <p>This is the payroll service from Section 2, as files:</p>
+<div class="tree">Payroll/
+├── Api/              <span class="dim">namespace Payroll.Api</span>
+│   └── PayslipController.cs
+├── Application/      <span class="dim">namespace Payroll.Application</span>
+│   └── PayslipService.cs
+├── Domain/           <span class="dim">namespace Payroll.Domain</span>
+│   ├── Employee.cs
+│   └── PayslipCalculator.cs
+└── Infrastructure/   <span class="dim">namespace Payroll.Infrastructure</span>
+    ├── PayslipRepository.cs
+    └── SqlConnectionFactory.cs</div>
+      <div class="task">
+        <span class="eyebrow">Your task</span>
+        <p>Last sprint, a payslip page showed a raw SQL error to a user. The controller had called <code>PayslipRepository</code> directly and skipped <code>PayslipService</code>, which handles errors. Write a NetArchTest rule so this can't happen again. Try it before opening the hint.</p>
+      </div>
+      <details>
+        <summary>Hint</summary>
+        <div class="body"><p>Start from the Section 3 test. You only change two strings: the namespace you select, and the namespace those classes must not use.</p></div>
+      </details>
+      <details>
+        <summary>Solution</summary>
+        <div class="body">
+          <div class="code-card">
+<pre><code class="language-csharp">[Fact]
+public void Controllers_should_not_use_infrastructure()
+{
+    var result = Types.InAssembly(typeof(PayslipController).Assembly)
+        .That()
+        .ResideInNamespace("Payroll.Api")
+        .ShouldNot()
+        .HaveDependencyOn("Payroll.Infrastructure")
+        .GetResult();
+
+    Assert.True(result.IsSuccessful,
+        "Controllers using Infrastructure: " +
+        string.Join(", ", result.FailingTypeNames ?? Array.Empty&lt;string&gt;()));
+}</code></pre>
+          </div>
+          <p><strong>Now prove it works.</strong> Add <code>using Payroll.Infrastructure;</code> and a call to <code>PayslipRepository</code> inside <code>PayslipController</code>, then run <code>dotnet test</code>. The test should fail and name <code>Payroll.Api.PayslipController</code>. Remove the line and it goes green. A rule you have never seen fail might be checking nothing (remember Section 3, question 2).</p>
+        </div>
+      </details>
+      <div class="quiz" style="gap:12px">
+        <div class="quiz-head"><h3>Explain it back</h3><span class="tally">no score</span></div>
+        <label for="teachback">In two sentences, explain to a product manager what an architecture test is and why your team should have one.</label>
+        <textarea id="teachback" placeholder="An architecture test is…"></textarea>
+        <div class="row">
+          <button class="btn" type="button" id="copy-teachback">Copy for Claude to check</button>
+          <span class="copied" id="copied-teachback" hidden></span>
+        </div>
+      </div>
+      <div class="finish">
+        <div class="finish-top">
+          <div class="big" id="final-score">0<small> / 12</small></div>
+          <div>
+            <h3 id="final-title">12 questions to go</h3>
+            <p class="muted" id="final-note">Each section's quiz counts. Wrong answers show why, so they are worth reading too.</p>
+          </div>
+        </div>
+        <div style="display:grid; gap:10px">
+          <span class="eyebrow">What to ask Claude next</span>
+          <ul class="asks">
+            <li><span>Give me five harder questions on architecture tests, one at a time. Wait for my answer before showing the next one.</span><button class="btn ghost small" type="button" data-copy>Copy</button></li>
+            <li><span>Here is our solution's folder structure: [paste]. Suggest the three architecture rules we should add first, and why.</span><button class="btn ghost small" type="button" data-copy>Copy</button></li>
+            <li><span>What is the difference between NetArchTest and ArchUnitNET, and which suits a team writing its first rules?</span><button class="btn ghost small" type="button" data-copy>Copy</button></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- cheat sheet -->
+    <section class="view" id="sheet" data-label="Cheat sheet" hidden>
+      <div class="head">
+        <span class="eyebrow">Cheat sheet</span>
+        <h2>Everything from this course on one screen</h2>
+      </div>
+      <div class="sheet">
+        <div>
+          <h3>The pattern</h3>
+          <p class="pattern">Load → Select → Condition → Result</p>
+          <p class="muted" style="font-size:.92rem">Load the compiled code, pick the classes, say what they must (not) do, run it and read the names that failed.</p>
+        </div>
+        <div>
+          <h3>Three things to remember</h3>
+          <ul>
+            <li>Rules name namespaces as text. Rename a namespace and the rule passes silently. Break it once on purpose.</li>
+            <li>Start with one rule the team already agrees on.</li>
+            <li>Old violations? Record them as exceptions. Never skip the test.</li>
+          </ul>
+        </div>
+        <div class="wide">
+          <h3>Tools by stack</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Stack</th><th>Tool</th><th>Reads</th><th>Docs</th></tr></thead>
+              <tbody>
+                <tr><td>C# / .NET</td><td>NetArchTest.Rules</td><td>Compiled assemblies</td><td><a href="https://github.com/BenMorris/NetArchTest" target="_blank" rel="noopener">github.com/BenMorris/NetArchTest</a></td></tr>
+                <tr><td>C# / .NET</td><td>ArchUnitNET</td><td>Compiled assemblies</td><td><a href="https://github.com/TNG/ArchUnitNET" target="_blank" rel="noopener">github.com/TNG/ArchUnitNET</a></td></tr>
+                <tr><td>Java / Kotlin</td><td>ArchUnit</td><td>Compiled class files</td><td><a href="https://www.archunit.org/userguide/html/000_Index.html" target="_blank" rel="noopener">archunit.org user guide</a></td></tr>
+                <tr><td>TypeScript / JavaScript</td><td>dependency-cruiser</td><td>Import statements</td><td><a href="https://github.com/sverweij/dependency-cruiser" target="_blank" rel="noopener">github.com/sverweij/dependency-cruiser</a></td></tr>
+                <tr><td>Python</td><td>import-linter</td><td>Import statements</td><td><a href="https://import-linter.readthedocs.io/" target="_blank" rel="noopener">import-linter.readthedocs.io</a></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="wide">
+          <h3>Words used in this course</h3>
+          <dl>
+            <dt>Layer</dt><dd>A group of code with one job, such as the API, the business rules or the database access.</dd>
+            <dt>Dependency</dt><dd>One piece of code using another. A uses B means A depends on B.</dd>
+            <dt>Namespace</dt><dd>The address of a class in C#, like <code>Payroll.Domain</code>. Rules use it to pick classes.</dd>
+            <dt>Assembly</dt><dd>The compiled .dll file a C# project builds into.</dd>
+            <dt>Static analysis</dt><dd>Checking code by reading it, without running the app.</dd>
+            <dt>CI</dt><dd>The pipeline that builds and tests every pull request automatically.</dd>
+          </dl>
+        </div>
+      </div>
+      <div class="row"><button class="btn ghost small" type="button" id="reset">Clear my answers and start over</button><span class="copied" id="reset-note" hidden>Answers cleared.</span></div>
+    </section>
+  </div>
+
+  <footer class="nav">
+    <button class="btn ghost" type="button" id="back">Back</button>
+    <span class="where" id="where">Start</span>
+    <button class="btn" type="button" id="next">Next</button>
+  </footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-csharp.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-java.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script>
+const QUIZZES = {
+  s1: [
+    { q: "Which question would an architecture test answer?", options: [
+      ["Does the payslip calculator return the right net salary?", "That is behaviour: what the code does with an input. A unit test checks it."],
+      ["Does any class in Payroll.Domain use something from Payroll.Infrastructure?", "Right. It is about structure: which parts of the code depend on which."],
+      ["Does the payslip page load in under two seconds?", "That is a performance test. Architecture tests never run the app."],
+      ["Does the API return 200 for a valid employee ID?", "That is an API test: it calls the running service."]
+    ], correct: 1 },
+    { q: "A developer adds using Payroll.Infrastructure.Database; to PayslipCalculator, which lives in the Domain layer. Both layers are in the same project and all unit tests pass. What catches this?", options: [
+      ["The compiler", "The compiler only checks that the code is valid C#. Both namespaces are in the same project, so the line is perfectly legal."],
+      ["The unit tests", "Unit tests check results. The calculator still returns the right numbers, so they stay green."],
+      ["An architecture test with the rule \"Domain must not depend on Infrastructure\"", "Yes. The rule names the forbidden dependency, so the build fails and names PayslipCalculator."],
+      ["Nothing needs to: the code works", "It works today, but now the payroll rules need a database to be tested or reused. That drift is exactly what these rules stop."]
+    ], correct: 2 },
+    { q: "Do architecture tests replace code review?", options: [
+      ["Yes. Once you have them, review is optional", "They only check the rules you wrote down. Review still catches naming, logic and judgement calls."],
+      ["No. They take the written-down rules off the reviewer's plate", "Right. A reviewer no longer has to spot every stray using line. The build does it."]
+    ], correct: 1 }
+  ],
+  s2: [
+    { q: "Does an architecture test need the application running, with a database?", options: [
+      ["Yes, it watches the app while it runs", "No. It reads the compiled code and never starts the app."],
+      ["No, it reads the compiled code without running it", "Right. That is static analysis, and it is why the test takes seconds and needs no test environment."]
+    ], correct: 1 },
+    { q: "Which order are the steps in?", options: [
+      ["Check the rule → Load the code → Select classes → Report", "The tool cannot check a rule before it has read the code."],
+      ["Load → Map dependencies → Select classes → Check → Report", "Right. Read the code, map who uses whom, pick the classes, apply the condition, report."],
+      ["Select classes → Run the app → Report", "No app runs at any point."]
+    ], correct: 1 },
+    { q: "The test fails. What does it tell you?", options: [
+      ["A stack trace from the running app", "There is no running app, so there is no stack trace."],
+      ["The names of the classes that broke the rule", "Yes, for example Payroll.Domain.PayslipCalculator. You know exactly which file to open."],
+      ["A score out of 100 for your architecture", "There is no score. Each rule passes or fails."]
+    ], correct: 1 }
+  ],
+  s3: [
+    { q: "In the C# test, which line decides which classes the rule applies to?", options: [
+      ["Types.InAssembly(...)", "That loads every class in the project. The next line narrows it down."],
+      [".That().ResideInNamespace(\"Payroll.Domain\")", "Right. That is the Select part."],
+      [".ShouldNot().HaveDependencyOn(...)", "That is the Condition: what the selected classes must not do."],
+      [".GetResult()", "That runs the check and collects the result."]
+    ], correct: 1 },
+    { q: "Someone renames the namespace Payroll.Infrastructure to Payroll.Persistence. What happens to the test?", options: [
+      ["It fails, because the namespace no longer exists", "Sadly not. The rule matches names as text. Nothing matches any more, so nothing breaks the rule."],
+      ["It keeps passing, but now checks nothing", "Right, and it is the sneakiest way these tests fail. Break each rule once on purpose to see it go red, and update rules when namespaces move."],
+      ["The code no longer compiles", "The namespace in the rule is a string, so the compiler does not know it refers to anything."]
+    ], correct: 1 },
+    { q: "Where should this test run?", options: [
+      ["Only on the architect's machine", "Then it only catches problems when someone remembers to run it."],
+      ["With the other tests, on every pull request in CI", "Yes. It is an ordinary xUnit test, so the pipeline that runs your unit tests runs it too."],
+      ["Once a quarter, in an architecture review", "By then the stray dependency has been copied ten times."]
+    ], correct: 1 }
+  ],
+  s4: [
+    { q: "You switch on a new rule and it finds 40 places in existing code that already break it. What is the best first move?", options: [
+      ["Delete the rule, it is too late", "The rule still stops violation number 41."],
+      ["Fix all 40 before merging the rule", "Possible, but it can hold the rule back for weeks while new violations keep arriving."],
+      ["Record the 40 as known exceptions and fail only on new ones", "Yes. ArchUnit calls this freezing a rule. Then fix the old ones over time."],
+      ["Mark the test as skipped", "A skipped test catches nothing."]
+    ], correct: 2 },
+    { q: "Which of these is NOT an architecture rule?", options: [
+      ["Classes ending in Controller live in Payroll.Api", "This is one: a naming rule."],
+      ["Payroll.Absence must not use Payroll.Tax.Internal", "This is one: a module boundary rule."],
+      ["PayslipCalculator returns 0 net pay for an unpaid leave month", "Right. That is behaviour, so it belongs in a unit test."],
+      ["No two modules depend on each other in a circle", "This is one: a no-cycles rule."]
+    ], correct: 2 },
+    { q: "The payslip page showed a raw SQL error because the controller called the repository directly. Which rule would have stopped it?", options: [
+      ["Controllers must not depend on Infrastructure", "Right. You will write exactly this rule in the exercise."],
+      ["Domain must not depend on Infrastructure", "A good rule, but the controller is not in Domain, so it would still pass."],
+      ["Classes ending in Repository live in Infrastructure", "That is already true here. It says where repositories live, not who may call them."]
+    ], correct: 0 }
+  ]
+};
+
+const STORE_KEY = "arch-tests-course-v1";
+const TOTAL = Object.values(QUIZZES).reduce((n, qs) => n + qs.length, 0);
+const views = [...document.querySelectorAll(".view")];
+const stage = document.getElementById("stage");
+let current = 0;
+let saved = {};
+let answered = 0, correct = 0;
+const doneBySection = {};
+
+function load() { try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch (e) { return {}; } }
+function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(saved)); } catch (e) {} }
+
+/* step pills */
+const steps = document.getElementById("steps");
+views.forEach((v, i) => {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.dataset.view = v.id;
+  const mark = v.id === "start" ? "▸" : v.id === "sheet" ? "★" : String(i);
+  b.innerHTML = `<span class="dot">${mark}</span>`;
+  b.appendChild(document.createTextNode(v.dataset.label));
+  b.addEventListener("click", () => show(i));
+  steps.appendChild(b);
+});
+
+function show(i, fromHash) {
+  current = Math.max(0, Math.min(views.length - 1, i));
+  views.forEach((v, j) => (v.hidden = j !== current));
+  steps.querySelectorAll("button").forEach((b, j) => {
+    /* scroll the pill row by hand: scrollIntoView would also scroll the intranet page around the iframe */
+    if (j === current) { b.setAttribute("aria-current", "step"); steps.scrollLeft = b.offsetLeft - steps.clientWidth / 2 + b.offsetWidth / 2; }
+    else b.removeAttribute("aria-current");
+  });
+  document.getElementById("back").disabled = current === 0;
+  const next = document.getElementById("next");
+  next.disabled = current === views.length - 1;
+  next.textContent = current === 0 ? "Start" : "Next";
+  document.getElementById("where").innerHTML = `${current + 1} / ${views.length}<span class="where-label"> · ${views[current].dataset.label}</span>`;
+  stage.scrollTop = 0;
+  if (!fromHash) { try { history.replaceState(null, "", "#" + views[current].id); } catch (e) {} }
+}
+
+/* quizzes */
+function renderQuiz(el, key) {
+  const qs = QUIZZES[key];
+  doneBySection[key] = 0;
+  const head = document.createElement("div");
+  head.className = "quiz-head";
+  head.innerHTML = `<h3>Check yourself</h3><span class="tally" id="tally-${key}">0 / ${qs.length}</span>`;
+  el.appendChild(head);
+  qs.forEach((item, qi) => {
+    const fs = document.createElement("fieldset");
+    fs.className = "q";
+    const lg = document.createElement("legend");
+    lg.innerHTML = `<span class="n">Q${qi + 1}</span>`;
+    lg.appendChild(document.createTextNode(item.q));
+    fs.appendChild(lg);
+    const fb = document.createElement("div");
+    fb.className = "feedback";
+    fb.hidden = true;
+    fb.setAttribute("aria-live", "polite");
+    const buttons = item.options.map(([label], oi) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "opt";
+      b.id = `${key}-q${qi}-o${oi}`;
+      b.innerHTML = `<span class="key">${"ABCD"[oi]}</span>`;
+      const t = document.createElement("span");
+      t.textContent = label;
+      b.appendChild(t);
+      b.addEventListener("click", () => answer(key, qi, oi, buttons, fb, true));
+      fs.appendChild(b);
+      return b;
+    });
+    fs.appendChild(fb);
+    el.appendChild(fs);
+    const prev = saved[key]?.[qi];
+    if (prev !== undefined) answer(key, qi, prev, buttons, fb, false);
+  });
+}
+
+function answer(key, qi, oi, buttons, fb, fresh) {
+  const item = QUIZZES[key][qi];
+  const ok = oi === item.correct;
+  buttons.forEach((b, i) => {
+    b.disabled = true;
+    if (i === item.correct) b.classList.add("is-right");
+    else if (i === oi) b.classList.add("is-wrong");
+    else b.classList.add("faded");
+  });
+  fb.className = "feedback " + (ok ? "ok" : "no");
+  fb.innerHTML = "";
+  const title = document.createElement("b");
+  title.textContent = ok ? "Correct" : "Not quite";
+  const why = document.createElement("p");
+  why.textContent = item.options[oi][1];
+  fb.append(title, why);
+  if (!ok) {
+    const right = document.createElement("p");
+    right.textContent = "Correct answer: " + item.options[item.correct][1];
+    fb.appendChild(right);
+  }
+  fb.hidden = false;
+  answered++;
+  if (ok) correct++;
+  doneBySection[key]++;
+  if (fresh) { (saved[key] = saved[key] || {})[qi] = oi; save(); }
+  document.getElementById(`tally-${key}`).textContent = `${doneBySection[key]} / ${QUIZZES[key].length}`;
+  if (doneBySection[key] === QUIZZES[key].length) {
+    steps.querySelector(`button[data-view="${key}"]`)?.classList.add("done");
+  }
+  updateProgress();
+}
+
+function updateProgress() {
+  document.getElementById("bar-fill").style.width = (answered / TOTAL * 100) + "%";
+  document.querySelector(".bar").setAttribute("aria-valuenow", answered);
+  document.getElementById("score-top").textContent = `${answered} / ${TOTAL} answered · ${correct} correct`;
+  document.getElementById("final-score").innerHTML = `${correct}<small> / ${TOTAL}</small>`;
+  const title = document.getElementById("final-title");
+  const note = document.getElementById("final-note");
+  if (answered < TOTAL) {
+    title.textContent = `${TOTAL - answered} questions to go`;
+    note.textContent = "Each section's quiz counts. Wrong answers show why, so they are worth reading too.";
+  } else if (correct >= 10) {
+    title.textContent = "You've got it";
+    note.textContent = "Try the exercise for real in your own repository, then ask Claude for harder questions tomorrow.";
+  } else {
+    title.textContent = "Good first pass";
+    note.textContent = "Reread the sections where you missed a question, then ask Claude to quiz you on just those.";
+  }
+}
+
+/* copy: clipboard may be refused inside an intranet iframe, so fall back to selecting the text */
+async function copyText(text, onDone) {
+  try { await navigator.clipboard.writeText(text); onDone(true); }
+  catch (e) { onDone(false); }
+}
+function selectNode(node) {
+  const r = document.createRange(); r.selectNodeContents(node);
+  const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+}
+
+document.getElementById("copy-prompt").addEventListener("click", () => {
+  const pre = document.querySelector(".prompt");
+  copyText(pre.textContent, ok => {
+    const msg = document.getElementById("copied-prompt");
+    msg.textContent = ok ? "Copied. Paste it into Claude." : "Selected. Press Ctrl+C to copy.";
+    msg.hidden = false;
+    if (!ok) selectNode(pre);
+  });
+});
+
+document.getElementById("copy-teachback").addEventListener("click", () => {
+  const ta = document.getElementById("teachback");
+  const text = "Check my explanation of architecture tests. Tell me what is right, what is wrong and what I missed, in plain language:\n\n" + ta.value.trim();
+  copyText(text, ok => {
+    const msg = document.getElementById("copied-teachback");
+    msg.textContent = ok ? "Copied. Paste it into Claude." : "Copy is blocked here. Select your text and copy it by hand.";
+    msg.hidden = false;
+    if (!ok) ta.select();
+  });
+});
+
+document.querySelectorAll("[data-copy]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const span = btn.previousElementSibling;
+    copyText(span.textContent, ok => {
+      if (!ok) selectNode(span);
+      btn.textContent = ok ? "Copied" : "Ctrl+C";
+      setTimeout(() => (btn.textContent = "Copy"), 1800);
+    });
+  });
+});
+
+document.querySelectorAll('[role="tab"]').forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll('[role="tab"]').forEach(t => {
+      const sel = t === tab;
+      t.setAttribute("aria-selected", sel);
+      document.getElementById(t.getAttribute("aria-controls")).hidden = !sel;
+    });
+  });
+});
+
+document.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => show(views.findIndex(v => v.id === b.dataset.go))));
+document.getElementById("back").addEventListener("click", () => show(current - 1));
+document.getElementById("next").addEventListener("click", () => show(current + 1));
+
+document.getElementById("reset").addEventListener("click", () => {
+  saved = {}; save();
+  answered = 0; correct = 0;
+  document.querySelectorAll(".quiz[data-quiz]").forEach(el => { el.innerHTML = ""; renderQuiz(el, el.dataset.quiz); });
+  steps.querySelectorAll("button.done").forEach(b => b.classList.remove("done"));
+  updateProgress();
+  document.getElementById("reset-note").hidden = false;
+  document.getElementById("resume-note").hidden = true;
+});
+
+function viewFromHash() {
+  const i = views.findIndex(v => "#" + v.id === location.hash);
+  return i < 0 ? 0 : i;
+}
+window.addEventListener("hashchange", () => show(viewFromHash(), true));
+
+saved = load();
+document.getElementById("resume-note").hidden = Object.keys(saved).length === 0;
+document.querySelectorAll(".quiz[data-quiz]").forEach(el => renderQuiz(el, el.dataset.quiz));
+updateProgress();
+show(viewFromHash(), true);
+</script>
+</body>
+</html>
